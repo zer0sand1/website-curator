@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Website Curator</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Website Curator</h1>
+    <nav>
+      <a href="/" class="active">Curate</a>
+      <a href="/liked">Liked Sites</a>
+    </nav>
+  </header>
+
+  <div id="counter">
+    <span id="reviewed-count">0</span> / <span id="total-count">0</span> reviewed
+  </div>
+
+  <div id="curation-area">
+    <div id="iframe-container">
+      <div id="iframe-nav">
+        <button id="iframe-back-btn" class="btn-iframe-nav" disabled>← Back</button>
+        <button id="iframe-forward-btn" class="btn-iframe-nav" disabled>Forward →</button>
+        <button id="iframe-home-btn" class="btn-iframe-nav">↻ Home</button>
+      </div>
+      <iframe id="site-frame" sandbox="allow-scripts allow-same-origin allow-forms" loading="lazy"></iframe>
+      <div id="site-fallback" class="hidden">
+        <p>Couldn't load this site. <a id="open-new-tab" href="#" target="_blank" rel="noopener">Open in new tab →</a></p>
+      </div>
+      <div id="loading-indicator">
+        <div class="spinner"></div>
+      </div>
+    </div>
+
+    <div id="sidebar">
+      <div id="site-nav-buttons">
+        <button id="prev-site-btn" class="btn btn-nav" disabled title="Previous curated site">← Prev Site</button>
+        <button id="next-site-btn" class="btn btn-nav" disabled title="Next curated site">Next Site →</button>
+      </div>
+
+      <div id="site-url-display">
+        <a id="site-url-link" href="#" target="_blank" rel="noopener"></a>
+      </div>
+
+      <div id="action-buttons">
+        <button id="dislike-btn" class="btn btn-dislike" title="Not for me">✕ Dislike</button>
+        <button id="like-btn" class="btn btn-like" title="I like this!">♥ Like</button>
+      </div>
+
+      <div id="note-section">
+        <label id="note-checkbox-label">
+          <input type="checkbox" id="note-checkbox"> Add note
+        </label>
+        <div id="note-textarea-wrapper" class="hidden">
+          <textarea id="note-textarea" placeholder="Why do you like this? What caught your eye?" rows="3"></textarea>
+        </div>
+      </div>
+
+      <div id="mobile-toggle">
+        <button id="mobile-view-btn" title="Preview mobile view">📱 Mobile preview</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="done-message" class="hidden">
+    <h2>All done!</h2>
+    <p>You've reviewed every website in the collection.</p>
+    <a href="/liked">View your liked sites</a>
+  </div>
+</div>
+
+<script>
+// ---- DOM refs ----
+const frame = document.getElementById("site-frame");
+const fallback = document.getElementById("site-fallback");
+const loadingIndicator = document.getElementById("loading-indicator");
+const openNewTab = document.getElementById("open-new-tab");
+const siteUrlLink = document.getElementById("site-url-link");
+const likeBtn = document.getElementById("like-btn");
+const dislikeBtn = document.getElementById("dislike-btn");
+const noteCheckbox = document.getElementById("note-checkbox");
+const noteTextarea = document.getElementById("note-textarea");
+const noteWrapper = document.getElementById("note-textarea-wrapper");
+const mobileViewBtn = document.getElementById("mobile-view-btn");
+const doneMessage = document.getElementById("done-message");
+const reviewedCount = document.getElementById("reviewed-count");
+const prevSiteBtn = document.getElementById("prev-site-btn");
+const nextSiteBtn = document.getElementById("next-site-btn");
+const iframeBackBtn = document.getElementById("iframe-back-btn");
+const iframeForwardBtn = document.getElementById("iframe-forward-btn");
+const iframeHomeBtn = document.getElementById("iframe-home-btn");
+const iframeContainer = document.getElementById("iframe-container");
+
+// ---- State ----
+let currentId = null;
+let currentUrl = null;
+let totalReviewed = 0;
+let history = [];          // curated sites history (for Prev/Next buttons)
+let historyPos = -1;
+let preloadedNext = null;
+
+// In-site navigation stack (for iframe Back/Forward)
+let siteHistory = [];
+let siteHistoryPos = -1;
+let originalUrl = null;
+
+// ---- Note toggle ----
+noteCheckbox.addEventListener("change", () => {
+  noteWrapper.classList.toggle("hidden", !noteCheckbox.checked);
+});
+
+// ---- Mobile preview ----
+mobileViewBtn.addEventListener("click", () => {
+  if (!currentUrl) return;
+  window.open(currentUrl, "_blank", "width=400,height=800,menubar=no,toolbar=no");
+});
+
+// ---- iFrame Back/Forward/Home (in-site navigation) ----
+iframeBackBtn.addEventListener("click", () => {
+  if (siteHistoryPos <= 0) return;
+  siteHistoryPos--;
+  loadInIframe(siteHistory[siteHistoryPos]);
+  updateIframeNavButtons();
+});
+
+iframeForwardBtn.addEventListener("click", () => {
+  if (siteHistoryPos >= siteHistory.length - 1) return;
+  siteHistoryPos++;
+  loadInIframe(siteHistory[siteHistoryPos]);
+  updateIframeNavButtons();
+});
+
+iframeHomeBtn.addEventListener("click", () => {
+  if (!originalUrl) return;
+  siteHistory = [originalUrl];
+  siteHistoryPos = 0;
+  loadInIframe(originalUrl);
+  updateIframeNavButtons();
+});
+
+function updateIframeNavButtons() {
+  iframeBackBtn.disabled = siteHistoryPos <= 0;
+  iframeForwardBtn.disabled = siteHistoryPos >= siteHistory.length - 1;
+}
+
+async function loadInIframe(url) {
+  loadingIndicator.classList.remove("hidden");
+  fallback.classList.add("hidden");
+  try {
+    const resp = await fetch("/proxy?url=" + encodeURIComponent(url));
+    if (!resp.ok) throw new Error("Proxy fetch failed");
+    const html = await resp.text();
+    frame.srcdoc = html;
+    originalUrl = url;
+    loadingIndicator.classList.add("hidden");
+  } catch {
+    loadingIndicator.classList.add("hidden");
+    fallback.classList.remove("hidden");
+    openNewTab.href = url;
+  }
+}
+
+frame.addEventListener("load", () => {
+  loadingIndicator.classList.add("hidden");
+  // Track in-site link clicks for back/forward navigation
+  try {
+    const doc = frame.contentDocument || frame.contentWindow?.document;
+    if (doc) {
+      doc.addEventListener("click", (e) => {
+        const link = e.target.closest("a");
+        if (!link || link.getAttribute("target")) return;
+        const href = link.getAttribute("href");
+        if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
+        try {
+          const resolved = new URL(href, originalUrl).href;
+          if (resolved !== originalUrl) {
+            if (siteHistoryPos < siteHistory.length - 1) {
+              siteHistory = siteHistory.slice(0, siteHistoryPos + 1);
+            }
+            siteHistory.push(resolved);
+            siteHistoryPos++;
+            updateIframeNavButtons();
+          }
+        } catch {}
+      });
+    }
+  } catch {}
+});
+
+// ---- Site-level navigation (Prev/Next curated sites) ----
+prevSiteBtn.addEventListener("click", goToPrevSite);
+nextSiteBtn.addEventListener("click", goToNextSite);
+
+function updateNavButtons() {
+  prevSiteBtn.disabled = historyPos <= 0;
+  nextSiteBtn.disabled = historyPos >= history.length - 1;
+}
+
+async function goToPrevSite() {
+  if (historyPos <= 0) return;
+  historyPos--;
+  const entry = history[historyPos];
+  const res = await fetch(`/api/site/${entry.id}`);
+  const data = await res.json();
+  loadSite(data, true);
+  updateNavButtons();
+}
+
+async function goToNextSite() {
+  if (historyPos >= history.length - 1) return;
+  historyPos++;
+  const entry = history[historyPos];
+  const res = await fetch(`/api/site/${entry.id}`);
+  const data = await res.json();
+  loadSite(data, true);
+  updateNavButtons();
+}
+
+async function preloadNext() {
+  if (!currentId) return;
+  try {
+    const res = await fetch(`/api/next?exclude=${currentId}`);
+    preloadedNext = await res.json();
+  } catch {
+    preloadedNext = null;
+  }
+}
+
+function loadSite(data, isHistory) {
+  currentId = data.id;
+  currentUrl = data.url;
+
+  doneMessage.classList.add("hidden");
+  document.getElementById("curation-area").classList.remove("hidden");
+  document.getElementById("counter").classList.remove("hidden");
+
+  siteUrlLink.textContent = data.url;
+  siteUrlLink.href = data.url;
+
+  // Reset in-site navigation for the new site
+  siteHistory = [data.url];
+  siteHistoryPos = 0;
+  updateIframeNavButtons();
+
+  loadInIframe(data.url);
+
+  noteCheckbox.checked = false;
+  noteWrapper.classList.add("hidden");
+  noteTextarea.value = "";
+  if (!isHistory && (data.status === "liked" || data.status === "disliked")) {
+    if (data.note) {
+      noteCheckbox.checked = true;
+      noteWrapper.classList.remove("hidden");
+      noteTextarea.value = data.note;
+    }
+  }
+
+  if (!isHistory) {
+    preloadNext();
+  }
+}
+
+likeBtn.addEventListener("click", () => rate("liked"));
+dislikeBtn.addEventListener("click", () => rate("disliked"));
+
+async function rate(status) {
+  if (!currentId) return;
+  const note = noteCheckbox.checked ? noteTextarea.value : "";
+
+  await fetch("/api/rate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: currentId, status, note }),
+  });
+
+  const exists = history.findIndex(e => e.id === currentId);
+  if (exists === -1) {
+    history.push({ id: currentId, url: currentUrl });
+    historyPos = history.length - 1;
+  } else if (historyPos < history.length - 1) {
+    history = history.slice(0, historyPos + 1);
+  }
+  totalReviewed++;
+  reviewedCount.textContent = totalReviewed;
+
+  let next;
+  if (preloadedNext && preloadedNext.url) {
+    next = preloadedNext;
+    preloadedNext = null;
+  } else {
+    const res = await fetch("/api/next");
+    next = await res.json();
+  }
+
+  if (next && next.url) {
+    history.push({ id: next.id, url: next.url });
+    historyPos = history.length - 1;
+    currentId = next.id;
+    loadSite(next, false);
+  } else {
+    showDone();
+  }
+  updateNavButtons();
+}
+
+function showDone() {
+  document.getElementById("curation-area").classList.add("hidden");
+  document.getElementById("counter").classList.add("hidden");
+  doneMessage.classList.remove("hidden");
+}
+
+async function init() {
+  const [statsRes, nextRes] = await Promise.all([
+    fetch("/api/stats"),
+    fetch("/api/next"),
+  ]);
+  const stats = await statsRes.json();
+  totalReviewed = stats.reviewed;
+  reviewedCount.textContent = stats.reviewed;
+  document.getElementById("total-count").textContent = stats.total;
+
+  const data = await nextRes.json();
+  if (data && data.url) {
+    history.push({ id: data.id, url: data.url });
+    historyPos = 0;
+    currentId = data.id;
+    loadSite(data, false);
+    updateNavButtons();
+  } else if (stats.reviewed === stats.total) {
+    showDone();
+  }
+}
+
+init();
+</script>
+</body>
+</html>

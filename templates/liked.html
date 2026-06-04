@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Liked Sites — Website Curator</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Website Curator</h1>
+    <nav>
+      <a href="/">Curate</a>
+      <a href="/liked" class="active">Liked Sites</a>
+    </nav>
+  </header>
+
+  <div id="liked-header">
+    <h2>Liked Sites</h2>
+    <p id="liked-count"></p>
+  </div>
+
+  <div id="liked-list"></div>
+
+  <div id="mobile-overlay" class="hidden" onclick="closeMobilePreview(event)">
+    <div id="mobile-overlay-content">
+      <button id="mobile-overlay-close" onclick="closeMobilePreview()">✕</button>
+      <iframe id="mobile-preview-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+    </div>
+  </div>
+</div>
+
+<script>
+async function loadLiked() {
+  const res = await fetch("/api/liked");
+  const sites = await res.json();
+  const list = document.getElementById("liked-list");
+  const count = document.getElementById("liked-count");
+
+  count.textContent = `${sites.length} site${sites.length !== 1 ? "s" : ""}`;
+
+  if (sites.length === 0) {
+    list.innerHTML = '<p class="empty">No liked sites yet. <a href="/">Go curate!</a></p>';
+    return;
+  }
+
+  for (const site of sites) {
+    const card = document.createElement("div");
+    card.className = "liked-card";
+
+    const favicon = document.createElement("img");
+    favicon.className = "favicon";
+    try {
+      const url = new URL(site.url);
+      favicon.src = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=32`;
+    } catch {
+      favicon.src = "";
+    }
+    favicon.onerror = () => { favicon.style.display = "none"; };
+
+    const info = document.createElement("div");
+    info.className = "card-info";
+
+    const urlLink = document.createElement("a");
+    urlLink.href = site.url;
+    urlLink.target = "_blank";
+    urlLink.rel = "noopener";
+    urlLink.textContent = site.url;
+    urlLink.className = "card-url";
+
+    info.appendChild(urlLink);
+
+    if (site.note) {
+      const note = document.createElement("p");
+      note.className = "card-note";
+      note.textContent = site.note;
+      info.appendChild(note);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "card-actions";
+
+    const openBtn = document.createElement("a");
+    openBtn.href = site.url;
+    openBtn.target = "_blank";
+    openBtn.rel = "noopener";
+    openBtn.textContent = "Open";
+    openBtn.className = "btn btn-small";
+
+    const mobileBtn = document.createElement("button");
+    mobileBtn.textContent = "📱 Mobile";
+    mobileBtn.className = "btn btn-small btn-mobile-preview";
+    mobileBtn.onclick = () => openMobilePreview(site.url);
+
+    actions.appendChild(openBtn);
+    actions.appendChild(mobileBtn);
+
+    card.appendChild(favicon);
+    card.appendChild(info);
+    card.appendChild(actions);
+
+    list.appendChild(card);
+  }
+}
+
+function openMobilePreview(url) {
+  const overlay = document.getElementById("mobile-overlay");
+  const frame = document.getElementById("mobile-preview-frame");
+  frame.src = url;
+  overlay.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+}
+
+function closeMobilePreview(e) {
+  if (e && e.target !== e.currentTarget) return;
+  const overlay = document.getElementById("mobile-overlay");
+  const frame = document.getElementById("mobile-preview-frame");
+  overlay.classList.add("hidden");
+  frame.src = "about:blank";
+  document.body.style.overflow = "";
+}
+
+loadLiked();
+</script>
+</body>
+</html>
