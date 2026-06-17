@@ -267,6 +267,18 @@ function loadSite(data, isHistory) {
 likeBtn.addEventListener("click", () => rate("liked"));
 dislikeBtn.addEventListener("click", () => rate("disliked"));
 
+function saveLikeToLocalStorage(id, url, note) {
+  const likes = JSON.parse(localStorage.getItem("curator_likes") || "[]");
+  const idx = likes.findIndex(l => l.id === id);
+  const entry = { id, url, note: note || "", rated_at: new Date().toISOString() };
+  if (idx >= 0) {
+    likes[idx] = entry;
+  } else {
+    likes.push(entry);
+  }
+  localStorage.setItem("curator_likes", JSON.stringify(likes));
+}
+
 async function rate(status) {
   if (!currentId) return;
   const note = noteCheckbox.checked ? noteTextarea.value : "";
@@ -276,6 +288,10 @@ async function rate(status) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id: currentId, status, note }),
   });
+
+  if (status === "liked") {
+    saveLikeToLocalStorage(currentId, currentUrl, note);
+  }
 
   const exists = history.findIndex(e => e.id === currentId);
   if (exists === -1) {

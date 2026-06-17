@@ -19,6 +19,7 @@
   <div id="liked-header">
     <h2>Liked Sites</h2>
     <p id="liked-count"></p>
+    <button id="download-btn" class="btn btn-download">⬇ Download as Markdown</button>
   </div>
 
   <div id="liked-list"></div>
@@ -32,9 +33,14 @@
 </div>
 
 <script>
-async function loadLiked() {
-  const res = await fetch("/api/liked");
-  const sites = await res.json();
+function getLikedSites() {
+  const sites = JSON.parse(localStorage.getItem("curator_likes") || "[]");
+  sites.sort((a, b) => new Date(b.rated_at) - new Date(a.rated_at));
+  return sites;
+}
+
+function loadLiked() {
+  const sites = getLikedSites();
   const list = document.getElementById("liked-list");
   const count = document.getElementById("liked-count");
 
@@ -103,6 +109,35 @@ async function loadLiked() {
     list.appendChild(card);
   }
 }
+
+function downloadAsMarkdown() {
+  const sites = getLikedSites();
+  if (sites.length === 0) return;
+
+  let md = "# Liked Websites\n\n";
+  md += `_Exported on ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}_\n\n`;
+
+  sites.forEach((site, i) => {
+    const hostname = site.url.replace(/^https?:\/\//, "").split("/")[0];
+    md += `${i + 1}. [${hostname}](${site.url})`;
+    if (site.note) {
+      md += ` — ${site.note}`;
+    }
+    md += "\n";
+  });
+
+  const blob = new Blob([md], { type: "text/markdown" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "liked-websites.md";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById("download-btn").addEventListener("click", downloadAsMarkdown);
 
 function openMobilePreview(url) {
   const overlay = document.getElementById("mobile-overlay");

@@ -313,6 +313,10 @@ nav a.active {
 /* ---- Liked page ---- */
 #liked-header {
   margin-bottom: 20px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 #liked-header h2 {
@@ -322,6 +326,23 @@ nav a.active {
 #liked-count {
   color: #888;
   font-size: 0.9rem;
+  flex: 1;
+}
+
+.btn-download {
+  width: auto;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  background: #222;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-download:hover {
+  background: #444;
 }
 
 #liked-list {
